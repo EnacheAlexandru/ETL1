@@ -6,9 +6,8 @@ import (
 )
 
 func main() {
-
 	const filenameInput string = "resources/input1.csv"
-	const chunkSize uint16 = 3
+	const chunkSize int = 3
 
 	err := sources.Extract(filenameInput, chunkSize)
 	if err != nil {
@@ -17,5 +16,4 @@ func main() {
 	}
 
 	fmt.Println("ok")
-
 }

@@ -2,7 +2,7 @@ package sources
 
 import (
 	"encoding/csv"
-	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strconv"
@@ -21,11 +21,10 @@ func contains[T comparable](s []T, e T) bool {
 // the header (a list of fields)
 // the list of chunks; a chunk is a list of rows; a row is a list of fields
 // the first error that occurred
-func readFile(filenameInput string, chunkSize uint16) ([]string, [][][]string, error) {
-
+func readFile(filenameInput string, chunkSize int) ([]string, [][][]string, error) {
 	f, err := os.Open(filenameInput)
 	if err != nil {
-		return nil, nil, errors.New("failed to open file")
+		return nil, nil, err
 	}
 
 	var header []string
@@ -40,11 +39,8 @@ func readFile(filenameInput string, chunkSize uint16) ([]string, [][][]string, e
 			break
 		}
 		if err != nil {
-			errF := f.Close()
-			if errF != nil {
-				return nil, nil, errors.New("failed closing file")
-			}
-			return nil, nil, errors.New("failed reading a row")
+			_ = f.Close()
+			return nil, nil, err
 		}
 		if contains(row, "") {
 			continue
@@ -53,7 +49,7 @@ func readFile(filenameInput string, chunkSize uint16) ([]string, [][][]string, e
 			header = row
 			continue
 		}
-		if len(chunk) == int(chunkSize) {
+		if len(chunk) == chunkSize {
 			chunks = append(chunks, chunk)
 			chunk = nil
 		}
@@ -62,7 +58,7 @@ func readFile(filenameInput string, chunkSize uint16) ([]string, [][][]string, e
 
 	err = f.Close()
 	if err != nil {
-		return nil, nil, errors.New("failed closing file")
+		return nil, nil, err
 	}
 	return header, chunks, nil
 }
@@ -75,32 +71,26 @@ func loadFiles(header []string, chunks [][][]string) error {
 
 		f, err := os.Create(currentChunkFilename)
 		if err != nil {
-			return errors.New("failed creating a file")
+			return err
 		}
 
 		writer := csv.NewWriter(f)
 		err = writer.Write(header)
 		if err != nil {
-			errF := f.Close()
-			if errF != nil {
-				return errors.New("failed closing a file")
-			}
-			return errors.New("failed writing row to file")
+			_ = f.Close()
+			return err
 		}
 		writer.Flush()
 
 		err = writer.WriteAll(chunk)
 		if err != nil {
-			errF := f.Close()
-			if errF != nil {
-				return errors.New("failed closing a file")
-			}
-			return errors.New("failed writing rows to file")
+			_ = f.Close()
+			return err
 		}
 
 		err = f.Close()
 		if err != nil {
-			return errors.New("failed closing a file")
+			return err
 		}
 	}
 
@@ -110,7 +100,11 @@ func loadFiles(header []string, chunks [][][]string) error {
 // Extract reads from an input .csv file, it extracts all the lines that have all the fields completed
 // and organizes them in chunks of dimension chunkSize and exports each chunk in separate files
 // (chunkX.csv where X is the id of the chunk)
-func Extract(filenameInput string, chunkSize uint16) error {
+func Extract(filenameInput string, chunkSize int) error {
+	if chunkSize < 2 {
+		return fmt.Errorf("chunk size should be at least 2")
+	}
+
 	header, chunks, err := readFile(filenameInput, chunkSize)
 	if err != nil {
 		return err
@@ -122,5 +116,4 @@ func Extract(filenameInput string, chunkSize uint16) error {
 	}
 
 	return nil
-
 }
