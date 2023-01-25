@@ -1,3 +1,3 @@
-module ETL1
+module etl
 
 go 1.19

@@ -1,15 +1,17 @@
 package main
 
 import (
-	"ETL1/sources"
+	"etl/fprocessing"
 	"fmt"
 )
 
 func main() {
-	const filenameInput string = "resources/input1.csv"
+	const filenameInput string = "input0.csv"
+	const filenamePath = "fprocessing/data/" + filenameInput
+	const chunkPath = "fprocessing/data/chunk"
 	const chunkSize int = 3
 
-	err := sources.Extract(filenameInput, chunkSize)
+	err := fprocessing.Extract(filenamePath, chunkPath, chunkSize)
 	if err != nil {
 		fmt.Println(err)
 		return
