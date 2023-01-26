@@ -2,6 +2,7 @@ package fprocessing
 
 import (
 	"encoding/csv"
+	"etl/msgerr"
 	"os"
 	"testing"
 )
@@ -48,28 +49,70 @@ func areSlicesOfSlicesOfSlicesEqual[T comparable](a, b [][][]T) bool {
 	return true
 }
 
-// checks if an element is present in given array
-func TestContains(t *testing.T) {
-	arr := []int{1, 2, 3, 4, 5}
-	elem := 4
+func TestAreSlicesOfSlicesEqual(t *testing.T) {
+	cases := []struct {
+		description string
+		a           [][]int
+		b           [][]int
+		want        bool
+	}{
+		{
+			description: "1. slices are equal",
+			a:           [][]int{{1, 2}, {3}, {4, 5, 6}},
+			b:           [][]int{{1, 2}, {3}, {4, 5, 6}},
+			want:        true,
+		},
+		{
+			description: "2. slices are not equal",
+			a:           [][]int{{1, 2}, {3}, {4, 5, 6}},
+			b:           [][]int{{1, 2}, {3}, {4, -5, 6}},
+			want:        false,
+		},
+		{
+			description: "3. one slice can be included in the other",
+			a:           [][]int{{1, 2}, {3}, {4, 5, 6}},
+			b:           [][]int{{1, 2}, {3}, {4, 5, 6}, {7}},
+			want:        false,
+		},
+	}
 
-	want := true
-	got := contains(arr, elem)
-	if got != want {
-		t.Errorf("got: %v, want: %v", got, want)
+	for _, c := range cases {
+		got := areSlicesOfSlicesEqual(c.a, c.b)
+		if got != c.want {
+			t.Errorf("test case: %v\n got: %v\n want: %v", c.description, got, c.want)
+		}
 	}
 }
 
-// checks if an element is not present in given array
-func TestContainsNotFound(t *testing.T) {
-	arr := []int{1, 2, 3, 4, 5}
-	elem := 6
-
-	want := false
-	got := contains(arr, elem)
-	if got != want {
-		t.Errorf("got: %v, want: %v", got, want)
+// checks if an element is present in given array
+func TestContains(t *testing.T) {
+	cases := []struct {
+		description string
+		arr         []int
+		elem        int
+		want        bool
+	}{
+		{
+			description: "1. element is present",
+			arr:         []int{1, 2, 3, 4, 5},
+			elem:        4,
+			want:        true,
+		},
+		{
+			description: "2. element is not present",
+			arr:         []int{1, 2, 3, 4, 5},
+			elem:        6,
+			want:        false,
+		},
 	}
+
+	for _, c := range cases {
+		got := contains(c.arr, c.elem)
+		if got != c.want {
+			t.Errorf("test case: %v\n got: %v\n want: %v", c.description, got, c.want)
+		}
+	}
+
 }
 
 // if the header is empty, the new row will become the header
@@ -146,127 +189,77 @@ func TestChunkFull(t *testing.T) {
 	}
 }
 
-// if the legal rows cannot be divided by the chunkSize,
-// all chunks except the last one, should have the size of chunkSize
-func TestReadFileAllValidLastChunkNotFull(t *testing.T) {
-	filename := "data/test/inputreadfileallvalidlastchunknotfull_test.csv"
-	chunkSize := 2
-
-	gotHeader, gotChunks, gotErr := readFile(filename, chunkSize)
-
-	if gotErr != nil {
-		t.Errorf("got: %v, want: %v", gotErr, nil)
-	}
-
-	wantChunks := [][][]string{
+func TestReadFile(t *testing.T) {
+	cases := []struct {
+		description string
+		filename    string
+		chunkSize   int
+		wantErr     error
+		wantChunks  [][][]string
+		wantHeader  []string
+	}{
 		{
-			{"1", "Mavra", "Malec", "mmalec0@usa.gov", "Female", "229.215.245.102"},
-			{"2", "Fan", "Gilvear", "fgilvear1@people.com.cn", "Female", "125.219.253.132"},
+			description: "1. number of valid rows do not exactly divide by chunkSize",
+			filename:    "data/test/somevalidrows_test.csv",
+			chunkSize:   3,
+			wantErr:     nil,
+			wantChunks: [][][]string{
+				{
+					{"1", "Mavra", "Malec", "mmalec0@usa.gov", "Female", "229.215.245.102"},
+					{"2", "Fan", "Gilvear", "fgilvear1@people.com.cn", "Female", "125.219.253.132"},
+					{"4", "Tremayne", "Loosemore", "tloosemore3@cnn.com", "Male", "167.249.115.222"},
+				},
+				{
+					{"5", "Benoite", "Calve", "bjaffray4@github.com", "Female", "148.75.193.241"},
+				},
+			},
+			wantHeader: []string{
+				"id", "first_name", "last_name", "email", "gender", "ip_address",
+			},
 		},
 		{
-			{"3", "Gerri", "Choffin", "gchoffin2@ning.com", "Male", "9.254.198.50"},
-			{"4", "Tremayne", "Loosemore", "tloosemore3@cnn.com", "Male", "167.249.115.222"},
+			description: "2. number of valid rows exactly divides by chunkSize",
+			filename:    "data/test/somevalidrows_test.csv",
+			chunkSize:   2,
+			wantErr:     nil,
+			wantChunks: [][][]string{
+				{
+					{"1", "Mavra", "Malec", "mmalec0@usa.gov", "Female", "229.215.245.102"},
+					{"2", "Fan", "Gilvear", "fgilvear1@people.com.cn", "Female", "125.219.253.132"},
+				},
+				{
+					{"4", "Tremayne", "Loosemore", "tloosemore3@cnn.com", "Male", "167.249.115.222"},
+					{"5", "Benoite", "Calve", "bjaffray4@github.com", "Female", "148.75.193.241"},
+				},
+			},
+			wantHeader: []string{
+				"id", "first_name", "last_name", "email", "gender", "ip_address",
+			},
 		},
 		{
-			{"5", "Benoite", "Calve", "bjaffray4@github.com", "Female", "148.75.193.241"},
-		},
-	}
-
-	if !areSlicesOfSlicesOfSlicesEqual(gotChunks, wantChunks) {
-		t.Errorf("got: %v, want: %v", gotChunks, wantChunks)
-	}
-
-	wantHeader := []string{"id", "first_name", "last_name", "email", "gender", "ip_address"}
-
-	if !areSlicesEqual(gotHeader, wantHeader) {
-		t.Errorf("got: %v, want: %v", gotHeader, wantHeader)
-	}
-}
-
-// if the legal rows can be divided by the chunkSize,
-// all chunks should have the size of chunkSize
-func TestReadFileAllValidChunksFull(t *testing.T) {
-	filename := "data/test/inputreadfileallvalidchunksfull_test.csv"
-	chunkSize := 2
-
-	gotHeader, gotChunks, gotErr := readFile(filename, chunkSize)
-
-	if gotErr != nil {
-		t.Errorf("got: %v, want: %v", gotErr, nil)
-	}
-
-	wantChunks := [][][]string{
-		{
-			{"1", "Mavra", "Malec", "mmalec0@usa.gov", "Female", "229.215.245.102"},
-			{"2", "Fan", "Gilvear", "fgilvear1@people.com.cn", "Female", "125.219.253.132"},
-		},
-		{
-			{"3", "Gerri", "Choffin", "gchoffin2@ning.com", "Male", "9.254.198.50"},
-			{"4", "Tremayne", "Loosemore", "tloosemore3@cnn.com", "Male", "167.249.115.222"},
+			description: "3. error reading input file",
+			filename:    "data/test/invalid_file",
+			chunkSize:   2,
+			wantErr:     msgerr.ErrorFileOpen,
+			wantChunks:  nil,
+			wantHeader:  nil,
 		},
 	}
 
-	if !areSlicesOfSlicesOfSlicesEqual(gotChunks, wantChunks) {
-		t.Errorf("got: %v, want: %v", gotChunks, wantChunks)
-	}
+	for _, c := range cases {
+		gotHeader, gotChunks, gotErr := readFile(c.filename, c.chunkSize)
 
-	wantHeader := []string{"id", "first_name", "last_name", "email", "gender", "ip_address"}
+		if gotErr != c.wantErr {
+			t.Errorf("test case: %v\n got: %v\n want: %v", c.description, gotErr, c.wantErr)
+		}
 
-	if !areSlicesEqual(gotHeader, wantHeader) {
-		t.Errorf("got: %v, want: %v", gotHeader, wantHeader)
-	}
-}
+		if !areSlicesOfSlicesOfSlicesEqual(gotChunks, c.wantChunks) {
+			t.Errorf("test case: %v\n got: %v\n want: %v", c.description, gotChunks, c.wantChunks)
+		}
 
-// the invalid rows should be ignored
-func TestReadFileSomeInvalidRows(t *testing.T) {
-	filename := "data/test/inputreadfilesomeinvalidrows_test.csv"
-	chunkSize := 2
-
-	gotHeader, gotChunks, gotErr := readFile(filename, chunkSize)
-
-	if gotErr != nil {
-		t.Errorf("got: %v, want: %v", gotErr, nil)
-	}
-
-	wantChunks := [][][]string{
-		{
-			{"1", "Mavra", "Malec", "mmalec0@usa.gov", "Female", "229.215.245.102"},
-			{"2", "Fan", "Gilvear", "fgilvear1@people.com.cn", "Female", "125.219.253.132"},
-		},
-		{
-			{"5", "Benoite", "Calve", "bjaffray4@github.com", "Female", "148.75.193.241"},
-		},
-	}
-
-	if !areSlicesOfSlicesOfSlicesEqual(gotChunks, wantChunks) {
-		t.Errorf("got: %v, want: %v", gotChunks, wantChunks)
-	}
-
-	wantHeader := []string{"id", "first_name", "last_name", "email", "gender", "ip_address"}
-
-	if !areSlicesEqual(gotHeader, wantHeader) {
-		t.Errorf("got: %v, want: %v", gotHeader, wantHeader)
-	}
-}
-
-// if there is an error opening the input file
-func TestReadFileOpenError(t *testing.T) {
-	filename := "data/test/error.csv"
-	chunkSize := 2
-
-	gotHeader, gotChunks, gotErr := readFile(filename, chunkSize)
-
-	wantErr := "failed opening input file"
-	if gotErr.Error() != wantErr {
-		t.Errorf("got: %v, want: %v", gotErr.Error(), wantErr)
-	}
-
-	if gotChunks != nil {
-		t.Errorf("got: %v, want: %v", gotChunks, nil)
-	}
-
-	if gotHeader != nil {
-		t.Errorf("got: %v, want: %v", gotHeader, nil)
+		if !areSlicesEqual(gotHeader, c.wantHeader) {
+			t.Errorf("test case: %v\n got: %v\n want: %v", c.description, gotHeader, c.wantHeader)
+		}
 	}
 }
 
@@ -285,9 +278,10 @@ func TestWriteFiles(t *testing.T) {
 		},
 	}
 
+	var wantErr error = nil
 	gotErr := writeFiles(header, chunks, chunkPath)
-	if gotErr != nil {
-		t.Errorf("got: %v, want: %v", gotErr, nil)
+	if gotErr != wantErr {
+		t.Errorf("got: %v, want: %v", gotErr, wantErr)
 	}
 
 	f, _ := os.Open(chunkPath + "0.csv")
@@ -324,15 +318,16 @@ func TestWriteFiles(t *testing.T) {
 }
 
 func TestExtract(t *testing.T) {
-	filenameInput := "inputreadfilesomeinvalidrows_test.csv"
+	filenameInput := "somevalidrows_test.csv"
 	filenamePath := "data/test/" + filenameInput
 	chunkFilename := "test_chunk"
 	chunkPath := "data/test/" + chunkFilename
-	chunkSize := 2
+	chunkSize := 3
 
+	var wantErr error = nil
 	gotErr := Extract(filenamePath, chunkPath, chunkSize)
-	if gotErr != nil {
-		t.Errorf("got: %v, want: %v", gotErr, nil)
+	if gotErr != wantErr {
+		t.Errorf("got: %v, want: %v", gotErr, wantErr)
 	}
 
 	f, _ := os.Open(chunkPath + "0.csv")
@@ -343,6 +338,7 @@ func TestExtract(t *testing.T) {
 		{"id", "first_name", "last_name", "email", "gender", "ip_address"},
 		{"1", "Mavra", "Malec", "mmalec0@usa.gov", "Female", "229.215.245.102"},
 		{"2", "Fan", "Gilvear", "fgilvear1@people.com.cn", "Female", "125.219.253.132"},
+		{"4", "Tremayne", "Loosemore", "tloosemore3@cnn.com", "Male", "167.249.115.222"},
 	}
 	if !areSlicesOfSlicesEqual(gotRows, wantRows) {
 		t.Errorf("got: %v, want: %v", gotRows, wantRows)
@@ -365,4 +361,18 @@ func TestExtract(t *testing.T) {
 
 	_ = f.Close()
 	_ = os.Remove(chunkPath + "1.csv")
+}
+
+func TestExtractChunkTooSmall(t *testing.T) {
+	filenameInput := "somevalidrows_test.csv"
+	filenamePath := "data/test/" + filenameInput
+	chunkFilename := "test_chunk"
+	chunkPath := "data/test/" + chunkFilename
+	chunkSize := 0
+
+	wantErr := msgerr.ErrorChunkTooSmall
+	gotErr := Extract(filenamePath, chunkPath, chunkSize)
+	if gotErr != wantErr {
+		t.Errorf("got: %v, want: %v", gotErr, wantErr)
+	}
 }

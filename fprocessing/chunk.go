@@ -2,7 +2,7 @@ package fprocessing
 
 import (
 	"encoding/csv"
-	"fmt"
+	"etl/msgerr"
 	"io"
 	"os"
 	"strconv"
@@ -52,7 +52,7 @@ func chunkFull(chunks *[][][]string, chunk *[][]string, row []string, chunkSize 
 func readFile(filenameInput string, chunkSize int) ([]string, [][][]string, error) {
 	f, err := os.Open(filenameInput)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed opening input file")
+		return nil, nil, msgerr.ErrorFileOpen
 	}
 
 	var header []string
@@ -69,7 +69,7 @@ func readFile(filenameInput string, chunkSize int) ([]string, [][][]string, erro
 		}
 		if err != nil {
 			_ = f.Close()
-			return nil, nil, fmt.Errorf("failed reading input file")
+			return nil, nil, msgerr.ErrorFileClose
 		}
 		if contains(row, "") {
 			continue
@@ -81,16 +81,17 @@ func readFile(filenameInput string, chunkSize int) ([]string, [][][]string, erro
 	}
 
 	if f.Close() != nil {
-		return nil, nil, fmt.Errorf("failed closing input file")
+		return nil, nil, msgerr.ErrorFileClose
 	}
 
 	return header, chunks, nil
 }
 
 func writeRowCSV(f *os.File, writer *csv.Writer, row []string) error {
-	if writer.Write(row) != nil {
+	err := writer.Write(row)
+	if err != nil {
 		_ = f.Close()
-		return fmt.Errorf("failed writing row to output file")
+		return err
 	}
 	writer.Flush()
 
@@ -98,9 +99,10 @@ func writeRowCSV(f *os.File, writer *csv.Writer, row []string) error {
 }
 
 func writeRowsCSV(f *os.File, writer *csv.Writer, rows [][]string) error {
-	if writer.WriteAll(rows) != nil {
+	err := writer.WriteAll(rows)
+	if err != nil {
 		_ = f.Close()
-		return fmt.Errorf("failed writing rows to output file")
+		return err
 	}
 
 	return nil
@@ -112,7 +114,7 @@ func writeFiles(header []string, chunks [][][]string, chunkFilename string) erro
 
 		f, err := os.Create(currentChunkFilename)
 		if err != nil {
-			return fmt.Errorf("failed creating output file")
+			return msgerr.ErrorFileCreate
 		}
 
 		writer := csv.NewWriter(f)
@@ -126,7 +128,7 @@ func writeFiles(header []string, chunks [][][]string, chunkFilename string) erro
 		}
 
 		if f.Close() != nil {
-			return fmt.Errorf("failed closing output file")
+			return msgerr.ErrorFileClose
 		}
 	}
 
@@ -138,7 +140,7 @@ func writeFiles(header []string, chunks [][][]string, chunkFilename string) erro
 // (chunkX.csv where X is the id of the chunk)
 func Extract(filenameInput, chunkFilename string, chunkSize int) error {
 	if chunkSize < 1 {
-		return fmt.Errorf("chunk size should be at least 1")
+		return msgerr.ErrorChunkTooSmall
 	}
 
 	header, chunks, err := readFile(filenameInput, chunkSize)
