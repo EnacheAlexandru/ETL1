@@ -87,27 +87,6 @@ func readFile(filenameInput string, chunkSize int) ([]string, [][][]string, erro
 	return header, chunks, nil
 }
 
-func writeRowCSV(f *os.File, writer *csv.Writer, row []string) error {
-	err := writer.Write(row)
-	if err != nil {
-		_ = f.Close()
-		return err
-	}
-	writer.Flush()
-
-	return nil
-}
-
-func writeRowsCSV(f *os.File, writer *csv.Writer, rows [][]string) error {
-	err := writer.WriteAll(rows)
-	if err != nil {
-		_ = f.Close()
-		return err
-	}
-
-	return nil
-}
-
 func writeFiles(header []string, chunks [][][]string, chunkFilename string) error {
 	for i, chunk := range chunks {
 		currentChunkFilename := chunkFilename + strconv.Itoa(i) + ".csv"
@@ -119,11 +98,14 @@ func writeFiles(header []string, chunks [][][]string, chunkFilename string) erro
 
 		writer := csv.NewWriter(f)
 
-		if writeRowCSV(f, writer, header) != nil {
+		if writer.Write(header) != nil {
+			_ = f.Close()
 			return err
 		}
+		writer.Flush()
 
-		if writeRowsCSV(f, writer, chunk) != nil {
+		if writer.WriteAll(chunk) != nil {
+			_ = f.Close()
 			return err
 		}
 
